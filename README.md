@@ -14,13 +14,18 @@
 5 档语速 — 0.8× 到 1.2×，适合慢速听写和常速跟读
 播放控制 — 前进/后退 5 秒、重新播放、进度条拖拽
 快速开始
+
 依赖
 Python 3.10+
+
 网络连接（TTS 需要访问微软服务）
+
 安装
 pip install flask trafilatura edge-tts
+
 启动
 python server.py
+
 浏览器打开 http://127.0.0.1:5050。
 
 技术栈
