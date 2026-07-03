@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>朗读者 — English News Reader</title>
+<style>
+  :root {
+    --bg: #1a1a1e;
+    --surface: #232328;
+    --border: #333340;
+    --text: #e0e0e0;
+    --text-dim: #9090a0;
+    --accent: #60a5fa;
+    --accent-dim: #3b82f6;
+    --highlight: rgba(96,165,250,0.2);
+    --radius: 8px;
+    --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 20px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+  header .subtitle { font-size: 12px; color: var(--text-dim); }
+
+  /* Input panel */
+  .input-panel {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: var(--font);
+  }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--text); }
+
+  .tab-content { display: none; padding: 14px 24px; }
+  .tab-content.active { display: block; }
+
+  .url-row, .paste-row {
+    display: flex;
+    gap: 8px;
+  }
+  .url-row input, .paste-row textarea {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    font-family: var(--font);
+    transition: border-color .2s;
+  }
+  .paste-row textarea { min-height: 120px; resize: vertical; }
+  .url-row input:focus, .paste-row textarea:focus, .paste-row input:focus { border-color: var(--accent); }
+  .url-row input::placeholder, .paste-row textarea::placeholder { color: var(--text-dim); }
+
+  .paste-meta {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .paste-meta input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    font-family: var(--font);
+  }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .2s;
+    white-space: nowrap;
+    font-family: var(--font);
+  }
+  .btn:hover { background: var(--accent-dim); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* Main */
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    max-width: 800px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .state-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 260px;
+    color: var(--text-dim);
+    text-align: center;
+    gap: 6px;
+  }
+  .state-empty .icon { font-size: 48px; opacity: .35; margin-bottom: 8px; }
+  .state-empty p { font-size: 14px; max-width: 360px; }
+  .state-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 48px 0;
+    color: var(--text-dim);
+  }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .article-title { font-size: 24px; font-weight: 600; margin-bottom: 12px; line-height: 1.3; }
+  .article-meta { font-size: 13px; color: var(--text-dim); margin-bottom: 20px; }
+  .sentence {
+    display: inline;
+    padding: 2px 0;
+    border-radius: 3px;
+    transition: background .12s;
+    cursor: pointer;
+  }
+  .sentence.active { background: var(--highlight); }
+  .sentence:hover { background: rgba(96,165,250,0.1); }
+  .paragraph { margin-bottom: 12px; font-size: 16px; line-height: 1.8; }
+
+  .controls {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .controls.hidden { display: none; }
+  .ctrl-group { display: flex; align-items: center; gap: 6px; }
+  .ctrl-btn {
+    width: 36px; height: 36px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .15s;
+    font-size: 16px;
+    font-family: var(--font);
+  }
+  .ctrl-btn:hover { background: var(--border); }
+  .ctrl-btn.play-btn { width: 44px; height: 44px; font-size: 20px; background: var(--accent); border-color: var(--accent); color: #fff; }
+  .ctrl-btn.play-btn:hover { background: var(--accent-dim); }
+  .ctrl-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .progress-bar-wrap { flex: 1; min-width: 100px; display: flex; align-items: center; gap: 8px; }
+  .progress-bar-wrap input[type=range] { flex: 1; accent-color: var(--accent); height: 4px; }
+  .time-label { font-size: 12px; color: var(--text-dim); min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; }
+  select {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    font-family: var(--font);
+  }
+  select:focus { border-color: var(--accent); }
+  .voice-label, .speed-label { font-size: 12px; color: var(--text-dim); }
+  .error-banner {
+    background: #451a1a;
+    border: 1px solid #803030;
+    color: #fca5a5;
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  .regenerate-hint {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 6px;
+  }
+  .regenerate-hint button {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+    font-family: var(--font);
+  }
+
+  @media (max-width: 600px) {
+    header { padding: 10px 16px; }
+    .input-panel .tab-content { padding: 12px 16px; }
+    .url-row, .paste-meta { flex-direction: column; }
+    main { padding: 16px; }
+    .controls { padding: 8px 16px; gap: 8px; }
+    .article-title { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>朗读者</h1>
+  <span class="subtitle">English News Reader · 听写跟读训练</span>
+</header>
+
+<div class="input-panel">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('url')">🔗 链接提取</button>
+    <button class="tab" onclick="switchTab('paste')">📋 粘贴文本</button>
+  </div>
+  <div class="tab-content active" id="tab-url">
+    <div class="url-row">
+      <input type="url" id="urlInput" placeholder="粘贴英文新闻链接 (e.g. https://www.bbc.com/news/...)" autofocus>
+      <button class="btn" id="extractUrlBtn" onclick="extractArticle()">提取文章</button>
+    </div>
+  </div>
+  <div class="tab-content" id="tab-paste">
+    <div class="paste-row">
+      <textarea id="pasteText" placeholder="在此粘贴英文新闻正文..."></textarea>
+    </div>
+    <div class="paste-meta">
+      <input type="text" id="pasteTitle" placeholder="文章标题（可选）">
+      <button class="btn" id="extractPasteBtn" onclick="extractPasted()">开始朗读</button>
+    </div>
+  </div>
+</div>
+
+<main id="main">
+  <div class="state-empty" id="emptyState">
+    <div class="icon">📰</div>
+    <p>粘贴一篇英文新闻链接或直接粘贴正文</p>
+    <p style="font-size:12px;opacity:.6">提取后自动生成高质量朗读音频，支持逐句高亮</p>
+  </div>
+</main>
+
+<div class="controls hidden" id="controlsBar">
+  <div class="ctrl-group">
+    <span class="voice-label">语音</span>
+    <select id="voiceSelect" onchange="onVoiceSpeedChange()"></select>
+  </div>
+  <div class="ctrl-group">
+    <span class="speed-label">语速</span>
+    <select id="speedSelect" onchange="onVoiceSpeedChange()"></select>
+  </div>
+  <div class="ctrl-group">
+    <button class="ctrl-btn" onclick="skipBack()" title="后退 5 秒">⏪</button>
+    <button class="ctrl-btn play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+    <button class="ctrl-btn" onclick="skipForward()" title="前进 5 秒">⏩</button>
+  </div>
+  <div class="progress-bar-wrap">
+    <span class="time-label" id="currentTime">0:00</span>
+    <input type="range" id="progressBar" min="0" max="100" value="0" oninput="seekAudio(this.value)">
+    <span class="time-label" id="totalTime">0:00</span>
+  </div>
+  <button class="ctrl-btn" onclick="restartAudio()" title="重新播放">↺</button>
+</div>
+
+<script>
+let articleData = null;
+let audio = null;
+let cues = [];
+let sentences = [];
+let currentSentenceIdx = -1;
+let audioId = null;
+let isPlaying = false;
+let voices = [];
+let speeds = [];
+let currentTab = 'url';
+
+document.addEventListener('DOMContentLoaded', () => {
+  fetch('/api/voices')
+    .then(r => r.json())
+    .then(data => {
+      voices = data.voices;
+      speeds = data.speeds;
+      populateSelects();
+    });
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') extractArticle();
+  });
+});
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.tab:nth-child(${tab === 'url' ? 1 : 2})`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  if (tab === 'url') document.getElementById('urlInput').focus();
+  else document.getElementById('pasteText').focus();
+}
+
+function populateSelects() {
+  const vs = document.getElementById('voiceSelect');
+  vs.innerHTML = voices.map(v => `<option value="${v.id}">${v.label}</option>`).join('');
+  const ss = document.getElementById('speedSelect');
+  ss.innerHTML = speeds.map(s => `<option value="${s.value}">${s.label}</option>`).join('');
+  ss.value = '+0%';
+}
+
+async function extractArticle() {
+  const url = document.getElementById('urlInput').value.trim();
+  if (!url) return;
+
+  const main = document.getElementById('main');
+  const btn = document.getElementById('extractUrlBtn');
+  btn.disabled = true;
+  main.innerHTML = '<div class="state-loading"><div class="spinner"></div>Extracting article from URL…</div>';
+
+  try {
+    const res = await fetch('/api/extract', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url})
+    });
+    const data = await res.json();
+    if (data.error) {
+      main.innerHTML = `<div class="error-banner">${data.error}</div><div class="state-empty"><p>Try pasting the article text directly instead.</p></div>`;
+      return;
+    }
+    articleData = data;
+    renderArticle(data);
+    generateTTS();
+  } catch (e) {
+    main.innerHTML = `<div class="error-banner">Network error: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function extractPasted() {
+  const text = document.getElementById('pasteText').value.trim();
+  const title = document.getElementById('pasteTitle').value.trim();
+  if (!text) return;
+
+  const main = document.getElementById('main');
+  const btn = document.getElementById('extractPasteBtn');
+  btn.disabled = true;
+  main.innerHTML = '<div class="state-loading"><div class="spinner"></div>Processing text…</div>';
+
+  try {
+    const res = await fetch('/api/extract', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text, title: title || undefined})
+    });
+    const data = await res.json();
+    if (data.error) {
+      main.innerHTML = `<div class="error-banner">${data.error}</div>`;
+      return;
+    }
+    articleData = data;
+    renderArticle(data);
+    generateTTS();
+  } catch (e) {
+    main.innerHTML = `<div class="error-banner">Error: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderArticle(data) {
+  const main = document.getElementById('main');
+  const sentencesHtml = data.sentences.map((s, i) =>
+    `<span class="sentence" data-idx="${i}" onclick="playSentence(${i})">${escapeHtml(s)} </span>`
+  ).join('');
+  const parasHtml = data.paragraphs.map(p => `<p class="paragraph">${escapeHtml(p)}</p>`).join('');
+
+  main.innerHTML = `
+    <h2 class="article-title">${escapeHtml(data.title)}</h2>
+    <div class="article-meta">${data.word_count} words · ${escapeHtml(data.url)}</div>
+    <div id="sentenceView" style="line-height:1.9;font-size:16px;">${sentencesHtml}</div>
+    <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px;">
+      <div style="font-size:13px;color:var(--text-dim);margin-bottom:8px;">原文段落</div>
+      ${parasHtml}
+    </div>
+    <div id="ttsStatus" class="state-loading"><div class="spinner"></div>Generating broadcast-quality audio…</div>
+  `;
+  sentences = data.sentences;
+}
+
+function updateSentenceView() {
+  const view = document.getElementById('sentenceView');
+  if (!view) return;
+  view.innerHTML = sentences.map((s, i) =>
+    `<span class="sentence" data-idx="${i}" onclick="playSentence(${i})">${escapeHtml(s)} </span>`
+  ).join('');
+}
+async function generateTTS() {
+  const voice = document.getElementById('voiceSelect').value || 'en-US-AriaNeural';
+  const rate = document.getElementById('speedSelect').value || '+0%';
+
+  // Reset audio
+  if (audio) { audio.pause(); audio = null; }
+  isPlaying = false;
+  updatePlayBtn();
+  cues = [];
+  currentSentenceIdx = -1;
+  document.getElementById('controlsBar').classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        text: articleData.text,
+        voice,
+        rate
+      })
+    });
+    const data = await res.json();
+    if (data.error) {
+      document.getElementById('ttsStatus').innerHTML = `<span style="color:#fca5a5">TTS failed: ${data.error}</span>`;
+      return;
+    }
+    audioId = data.audio_id;
+    cues = data.cues;
+    // Re-render sentences to match TTS sentence boundaries (ensures highlight alignment)
+    sentences = data.sentences;
+    updateSentenceView();
+    setupAudio(data.audio_url);
+    document.getElementById('ttsStatus').innerHTML = `<span style="color:#6ee7b7;">✓ Audio ready</span>`;
+    document.getElementById('controlsBar').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('ttsStatus').innerHTML = `<span style="color:#fca5a5">TTS error: ${e.message}</span>`;
+  }
+}
+
+function setupAudio(url) {
+  if (audio) {
+    audio.pause();
+    audio.removeEventListener('timeupdate', onTimeUpdate);
+  }
+  audio = new Audio(url);
+  audio.addEventListener('timeupdate', onTimeUpdate);
+  audio.addEventListener('ended', onAudioEnded);
+  audio.addEventListener('loadedmetadata', () => {
+    document.getElementById('totalTime').textContent = formatTime(audio.duration);
+  });
+  audio.addEventListener('play', () => { isPlaying = true; updatePlayBtn(); });
+  audio.addEventListener('pause', () => { isPlaying = false; updatePlayBtn(); });
+}
+
+function onVoiceSpeedChange() {
+  if (!articleData) return;
+  // Show a regenerate hint
+  const status = document.getElementById('ttsStatus');
+  if (status) {
+    status.innerHTML = `<span style="color:#fbbf24;">Voice/speed changed. <button onclick="generateTTS()">Regenerate audio</button></span>`;
+    status.style.display = 'block';
+  }
+}
+
+function togglePlay() {
+  if (!audio) return;
+  if (isPlaying) { audio.pause(); }
+  else { audio.play(); }
+}
+
+function updatePlayBtn() {
+  document.getElementById('playBtn').textContent = isPlaying ? '⏸' : '▶';
+}
+
+function onTimeUpdate() {
+  if (!audio) return;
+  const t = audio.currentTime * 1000;
+  const dur = audio.duration * 1000;
+  if (dur) document.getElementById('progressBar').value = (t / dur) * 100;
+  document.getElementById('currentTime').textContent = formatTime(audio.currentTime);
+
+  let found = -1;
+  for (let i = 0; i < cues.length; i++) {
+    if (t >= cues[i].start_ms && t < cues[i].end_ms) { found = i; break; }
+  }
+  if (found !== currentSentenceIdx) {
+    if (currentSentenceIdx >= 0) {
+      const oldEl = document.querySelector(`.sentence[data-idx="${currentSentenceIdx}"]`);
+      if (oldEl) oldEl.classList.remove('active');
+    }
+    currentSentenceIdx = found;
+    if (found >= 0) {
+      const el = document.querySelector(`.sentence[data-idx="${found}"]`);
+      if (el) { el.classList.add('active'); el.scrollIntoView({behavior:'smooth',block:'center'}); }
+    }
+  }
+}
+
+function onAudioEnded() {
+  isPlaying = false;
+  updatePlayBtn();
+  if (currentSentenceIdx >= 0) {
+    const el = document.querySelector(`.sentence[data-idx="${currentSentenceIdx}"]`);
+    if (el) el.classList.remove('active');
+    currentSentenceIdx = -1;
+  }
+}
+
+function seekAudio(val) {
+  if (!audio || !audio.duration) return;
+  audio.currentTime = (val / 100) * audio.duration;
+}
+
+function skipBack() { if (audio) audio.currentTime = Math.max(0, audio.currentTime - 5); }
+function skipForward() { if (audio) audio.currentTime = Math.min(audio.duration, audio.currentTime + 5); }
+
+function restartAudio() {
+  if (!audio) return;
+  audio.currentTime = 0;
+  if (!isPlaying) audio.play();
+}
+
+function playSentence(idx) {
+  if (!audio || !cues[idx]) return;
+  audio.currentTime = cues[idx].start_ms / 1000;
+  if (!isPlaying) audio.play();
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>
